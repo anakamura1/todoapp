@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVP To-Do Tracker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f6f8;
+            color: #333;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1 { text-align: center; color: #2c3e50; }
+        .input-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background-color: #2980b9; }
+        ul { list-style: none; padding: 0; }
+        li {
+            background: white;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .todo-text { flex: 1; margin-left: 10px; font-size: 16px; }
+        .completed-text { text-decoration: line-through; color: #888; }
+        .delete-btn {
+            background-color: #e74c3c;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .delete-btn:hover { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+    <h1>Task Manager</h1>
+    
+    <div class="input-section">
+        <input type="text" id="todo-input" placeholder="Add a new task...">
+        <button onclick="createTodo()">Add Task</button>
+    </div>
+
+    <ul id="todo-list"></ul>
+
+    <script>
+        const API_URL = "http://localhost/todos";
+
+        // READ: Fetch all tasks from the Nginx load balancer and render them
+        function fetchTodos() {
+            fetch(API_URL)
+                .then(response => response.json())
+                .then(todos => {
+                    const listElement = document.getElementById("todo-list");
+                    listElement.innerHTML = ""; // Clear existing elements before rebuilding
+                    
+                    todos.forEach(todo => {
+                        const li = document.createElement("li");
+                        
+                        // Checkbox for completion status
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.checked = todo.completed;
+                        checkbox.onclick = () => toggleTodo(todo.id, checkbox.checked);
+
+                        // Task text label
+                        const span = document.createElement("span");
+                        span.className = "todo-text" + (todo.completed ? " completed-text" : "");
+                        span.innerText = todo.title;
+
+                        // Delete button
+                        const deleteBtn = document.createElement("button");
+                        deleteBtn.className = "delete-btn";
+                        deleteBtn.innerText = "Delete";
+                        deleteBtn.onclick = () => deleteTodo(todo.id);
+
+                        li.appendChild(checkbox);
+                        li.appendChild(span);
+                        li.appendChild(deleteBtn);
+                        listElement.appendChild(li);
+                    });
+                })
+                .catch(err => console.error("Error reading data:", err));
+        }
+
+        // CREATE: Send a POST request to add a new task row
+function createTodo() {
+    const input = document.getElementById("todo-input");
+    const title = input.value.trim();
+    if (!title) return;
+
+    // We pass a structured JSON configuration block to fetch
+    fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"  // Informs FastAPI that a JSON payload is arriving
+        },
+        body: JSON.stringify({
+            title: title,
+            completed: false  // Matches the structure your ToDo schema expects
+        })
+    })
+    .then(() => {
+        input.value = ""; // Clean input box
+        fetchTodos();     // Refresh list display
+    })
+    .catch(err => console.error("Error writing data:", err));
+}
+
+        // UPDATE: Send a PUT request to alter the task state
+        function toggleTodo(id, isCompleted) {
+            fetch(`${API_URL}/${id}?completed=${isCompleted}`, { method: "PUT" })
+                .then(() => fetchTodos())
+                .catch(err => console.error("Error altering state:", err));
+        }
+
+        // DELETE: Send a DELETE request to drop a row completely
+        function deleteTodo(id) {
+            fetch(`${API_URL}/${id}`, { method: "DELETE" })
+                .then(() => fetchTodos())
+                .catch(err => console.error("Error deleting record:", err));
+        }
+
+        // Run fetchTodos automatically the moment the webpage loads in the browser
+        fetchTodos();
+    </script>
+</body>
+</html>

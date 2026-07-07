@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,14 @@ import security
 from database import engine, SessionLocal
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],            
+    allow_credentials=True,
+    allow_methods=["*"],             
+    allow_headers=["*"],             
+)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -26,7 +35,7 @@ def get_db():
 async def root():
     return({"message": "Hello World"})
 
-@app.post("/todo")
+@app.post("/todos")
 async def create_todo(todo: ToDo, db: Session = Depends(get_db)):
     db_todo = models.ToDoModel(title=todo.title, completed=todo.completed )
     db.add(db_todo)
@@ -39,7 +48,43 @@ async def get_todo( db: Session = Depends(get_db)):
     todos = db.query(models.ToDoModel).all()
     return todos
 
+@app.get("/todos/{id}")
+async def get_todoid(id: int, db: Session = Depends(get_db)):
 
+    todoitem = db.query(models.ToDoModel).filter(models.ToDoModel.id == id).first()
+
+    if not todoitem:
+        raise HTTPException(status_code=404, detail=f"Task with {id} not found")
+
+    return todoitem
+
+@app.put("/todos/{id}")
+async def update_todo(id: int, completed: bool, title: str = None, db: Session = Depends(get_db)):
+    todo = db.query(models.ToDoModel).filter(models.ToDoModel.id == id).first()
+
+    if not todo:
+        raise HTTPException(status_code=404, detail=f"todo {id} not found")
+
+    todo.completed = completed
+
+    if title is not None:
+        todo.title = title
+    
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+@app.delete("/todos/{id}")
+async  def del_todo(id: int, db: Session = Depends(get_db)):
+    tododelete = db.query(models.ToDoModel).filter(models.ToDoModel.id == id).first()
+
+    if not tododelete:
+        raise HTTPException(status_code=404, detail=f"todo {id} not found")
+
+    db.delete(tododelete)
+    db.commit()
+    return{"detail": f"Successfully deleted task {id}"}
+    
 @app.post("/users", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     
